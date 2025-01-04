@@ -1,0 +1,23 @@
+{
+  "name": "sec_task_rgr",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dimdim28/SEC_TASK_RGR.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Dimdim28/SEC_TASK_RGR/issues"
+  },
+  "homepage": "https://github.com/Dimdim28/SEC_TASK_RGR#readme",
+  "dependencies": {
+    "crypto": "^1.0.1"
+  }
+}
