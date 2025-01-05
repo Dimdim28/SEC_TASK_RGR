@@ -8,6 +8,9 @@ class Network {
   async initializeNodes() {
     console.log("Initializing all nodes...");
     await Promise.all(this.nodes.map((node) => node.initializeNode()));
+
+    console.log("Launching servers...");
+    await Promise.all(this.nodes.map((node) => node.launchServer()));
   }
 }
 

@@ -1,3 +1,5 @@
+const net = require("net");
+
 const CryptoHelper = require("./cryptoHelper");
 const FilesHelper = require("./filesHelper");
 const { CERT_DIR } = require("./constants");
@@ -41,6 +43,26 @@ class Node {
     logMessage(this.nodeName, "CA certificate loaded.");
 
     logMessage(this.nodeName, "Initialization completed.");
+  }
+
+  async launchServer() {
+    return new Promise((resolve) => {
+      const serverInstance = net.createServer((socket) => {
+        logMessage(this.nodeName, "Incoming client connection established.");
+
+        socket.on("error", (err) =>
+          logMessage(this.nodeName, `Socket error occurred: ${err.message}`)
+        );
+      });
+
+      serverInstance.listen(this.nodePort, () => {
+        logMessage(
+          this.nodeName,
+          `Server is now active and listening on port ${this.nodePort}`
+        );
+        resolve();
+      });
+    });
   }
 }
 
