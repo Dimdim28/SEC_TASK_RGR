@@ -5,7 +5,13 @@ const Network = require("./network");
 
   const network = new Network({
     nodes: ["Node1", "Node2", "Node3"],
+    connections: [
+      { name: "Node1", peers: ["Node2"] },
+      { name: "Node2", peers: ["Node3"] },
+      { name: "Node3", peers: ["Node1"] },
+    ],
   });
 
   await network.initializeNodes();
+  await network.establishConnections();
 })();
