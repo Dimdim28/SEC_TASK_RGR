@@ -54,11 +54,79 @@ class CertificationManager {
     console.log("Root certificate authority initialized successfully.");
     return authorityCertificate;
   }
+
+  static async issueServerCertificate(serverPublicKey, serverName) {
+    if (!CertificationManager.#caKeys) {
+      throw new Error(
+        "Root keys not found. Initialize the Certificate Authority first."
+      );
+    }
+
+    const serverCertificateDetails = {
+      subject: serverName,
+      issuedAt: new Date(),
+      expiresAt: new Date(new Date().setMonth(new Date().getMonth() + 6)),
+      publicKey: serverPublicKey.export({ type: "pkcs1", format: "pem" }),
+      authority: "Root Authority",
+    };
+
+    const authorityPrivateKey = CryptoHelper.parsePrivateKey(
+      CertificationManager.#caKeys.privateKey
+    );
+    const digitalSignature = CryptoHelper.signPayload(
+      authorityPrivateKey,
+      JSON.stringify(serverCertificateDetails)
+    );
+
+    serverCertificateDetails.signature = digitalSignature;
+    return serverCertificateDetails;
+  }
+
+  static async createServerCertificate(serverName) {
+    const serverCertPath = FilesHelper.joinPaths(
+      CERT_DIR,
+      `${serverName}-cert.pem`
+    );
+    const serverKeyPath = FilesHelper.joinPaths(
+      CERT_DIR,
+      `${serverName}-key.pem`
+    );
+
+    if (
+      (await FilesHelper.fileExists(serverCertPath)) &&
+      (await FilesHelper.fileExists(serverKeyPath))
+    ) {
+      console.log(
+        `Certificates for server "${serverName}" already exist. Skipping creation.`
+      );
+      return;
+    }
+
+    const serverKeyPair = CryptoHelper.createKeyPair();
+    const serverCertificate = await this.issueServerCertificate(
+      serverKeyPair.publicKey,
+      serverName
+    );
+
+    await FilesHelper.writeToFile(
+      serverCertPath,
+      JSON.stringify(serverCertificate)
+    );
+    await FilesHelper.writeToFile(
+      serverKeyPath,
+      serverKeyPair.privateKey.export({ type: "pkcs1", format: "pem" })
+    );
+
+    console.log(
+      `Certificate and private key generated for server "${serverName}".`
+    );
+  }
 }
 
 (async () => {
   await CertificationManager.verifyDirectoryStructure();
   await CertificationManager.initializeCertificateAuthority();
+  await CertificationManager.createServerCertificate("AppServerTest");
 })();
 
 module.exports = { CertificationManager };
