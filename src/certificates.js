@@ -83,6 +83,10 @@ class CertificationManager {
   }
 
   static async createServerCertificate(serverName) {
+    if (!CertificationManager.#caKeys) {
+      await CertificationManager.initializeCertificateAuthority();
+    }
+
     const serverCertPath = FilesHelper.joinPaths(
       CERT_DIR,
       `${serverName}-cert.pem`
@@ -126,7 +130,6 @@ class CertificationManager {
 (async () => {
   await CertificationManager.verifyDirectoryStructure();
   await CertificationManager.initializeCertificateAuthority();
-  await CertificationManager.createServerCertificate("AppServerTest");
 })();
 
 module.exports = { CertificationManager };

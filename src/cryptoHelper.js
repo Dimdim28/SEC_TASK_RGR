@@ -17,6 +17,8 @@ class CryptoHelper {
     signer.end();
     return signer.sign(privKey, "base64");
   };
+
+  static createRandomString = () => crypto.randomBytes(24).toString("hex");
 }
 
 module.exports = CryptoHelper;
