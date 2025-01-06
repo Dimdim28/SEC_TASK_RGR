@@ -340,6 +340,12 @@ class Node {
   }
 
   async transmitFile(targetPeer, fileLocation) {
+    const fileExists = await FilesHelper.fileExists(fileLocation);
+    if (!fileExists) {
+      logMessage(this.nodeName, `File not found: ${fileLocation}`);
+      return;
+    }
+
     const connection = this.activeClientConnections.find(
       (conn) => conn.peerName === targetPeer
     );
