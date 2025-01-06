@@ -1,8 +1,7 @@
 const net = require("net");
 const CryptoHelper = require("./cryptoHelper");
 const FilesHelper = require("./filesHelper");
-const { CERT_DIR, CA_SERVER_PORT } = require("./constants");
-const { CertificationManager } = require("./certificates");
+const { CERT_DIR, CA_SERVER_PORT, KEY_SERVER_PORT } = require("./constants");
 
 const logMessage = (node, msg) => console.log(`[${node}] ${msg}`);
 
@@ -15,35 +14,62 @@ class Node {
   }
 
   async initializeNode() {
-    const serverCertPath = FilesHelper.joinPaths(
-      CERT_DIR,
-      `${this.nodeName}-cert.pem`
-    );
-    const serverKeyPath = FilesHelper.joinPaths(
-      CERT_DIR,
-      `${this.nodeName}-key.pem`
-    );
+    const clientSocket = new net.Socket();
+    return new Promise((resolve, reject) => {
+      clientSocket.connect(KEY_SERVER_PORT, () => {
+        logMessage(this.nodeName, "Requesting certificate and keys...");
+        clientSocket.write(
+          JSON.stringify({ type: "generateKeys", nodeName: this.nodeName })
+        );
+      });
 
-    const caCertPath = FilesHelper.joinPaths(CERT_DIR, "ca-cert.pem");
+      clientSocket.on("data", async (data) => {
+        const response = JSON.parse(data.toString());
+        if (response.type === "keyPair") {
+          logMessage(
+            this.nodeName,
+            "Successfully received certificate and keys."
+          );
+          this.nodeCert = response.certificate;
+          this.privateKey = response.privateKey;
 
-    if (
-      !(await FilesHelper.fileExists(serverCertPath)) ||
-      !(await FilesHelper.fileExists(serverKeyPath))
-    ) {
-      logMessage(this.nodeName, "Generating certificates...");
-      await CertificationManager.createServerCertificate(this.nodeName);
-    }
+          const keyPath = FilesHelper.joinPaths(
+            CERT_DIR,
+            `${this.nodeName}-key.pem`
+          );
+          await FilesHelper.writeToFile(keyPath, this.privateKey);
 
-    this.serverCert = JSON.parse(
-      await FilesHelper.readFromFile(serverCertPath)
-    );
-    this.serverKey = await FilesHelper.readFromFile(serverKeyPath);
-    logMessage(this.nodeName, "Server certificate and key loaded.");
+          logMessage(this.nodeName, "Private key saved.");
 
-    this.caCert = JSON.parse(await FilesHelper.readFromFile(caCertPath));
-    logMessage(this.nodeName, "CA certificate loaded.");
+          const certPath = FilesHelper.joinPaths(
+            CERT_DIR,
+            `${this.nodeName}-cert.pem`
+          );
+          await FilesHelper.writeToFile(
+            certPath,
+            JSON.stringify(this.nodeCert)
+          );
+          logMessage(this.nodeName, "Certificate saved.");
 
-    logMessage(this.nodeName, "Initialization completed.");
+          resolve();
+        } else {
+          logMessage(
+            this.nodeName,
+            "Unexpected response received from Key Server."
+          );
+          reject(new Error("Unexpected response from Key Server."));
+        }
+        clientSocket.destroy();
+      });
+
+      clientSocket.on("error", (err) => {
+        logMessage(
+          this.nodeName,
+          `Key Server connection failed: ${err.message}`
+        );
+        reject(err);
+      });
+    });
   }
 
   async launchServer() {
@@ -66,7 +92,7 @@ class Node {
                 JSON.stringify({
                   type: "serverHello",
                   serverRandom: this.randomServerValue,
-                  serverCert: this.serverCert,
+                  serverCert: this.nodeCert,
                 })
               );
               logMessage(
@@ -77,7 +103,7 @@ class Node {
 
             case "premaster":
               const premasterSecret = CryptoHelper.decryptDataWithPrivateKey(
-                this.serverKey,
+                this.privateKey,
                 Buffer.from(payload.encryptedPremaster, "base64")
               );
               sessionKey = CryptoHelper.computeSessionKey(
@@ -154,7 +180,9 @@ class Node {
             this.nodeName,
             `Received serverHello from ${peerInfo.name}. Verifying certificate...`
           );
-          const isCertValid = this.validateCertificate(response.serverCert);
+          const isCertValid = await this.validateCertificate(
+            response.serverCert
+          );
 
           if (!isCertValid) {
             logMessage(
@@ -174,6 +202,11 @@ class Node {
           const encryptedPremaster = CryptoHelper.encryptDataWithPublicKey(
             response.serverCert.publicKey,
             premaster
+          );
+
+          logMessage(
+            this.nodeName,
+            `Premaster secret encrypted and sent to ${peerInfo.name}...`
           );
 
           clientSocket.write(
