@@ -1,9 +1,10 @@
 const Node = require("./node");
 
 class Network {
-  constructor({ nodes, connections }) {
+  constructor({ nodes, connections, files }) {
     this.nodes = nodes.map((name, index) => new Node(name, 3000 + index + 1));
     this.connections = connections || this.#createDefaultConnections();
+    this.files = files || [];
   }
 
   #createDefaultConnections() {
@@ -47,6 +48,20 @@ class Network {
       );
     }
     console.log("Connections established between all nodes.");
+  }
+
+  async sendFiles() {
+    console.log("Transmitting files between nodes...");
+    for (const { sender, receiver, filePath } of this.files) {
+      const senderNode = this.nodes.find((node) => node.nodeName === sender);
+      if (!senderNode) {
+        console.error(`Sender node "${sender}" not found.`);
+        continue;
+      }
+
+      await senderNode.transmitFile(receiver, filePath);
+    }
+    console.log("All files have been transmitted.");
   }
 }
 

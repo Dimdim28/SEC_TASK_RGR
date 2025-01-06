@@ -10,8 +10,10 @@ const Network = require("./network");
       // { name: "Node2", peers: ["Node3"] },
       // { name: "Node3", peers: ["Node1"] },
     ],
+    files: [{ sender: "Node1", receiver: "Node2", filePath: "./text.txt" }],
   });
 
   await network.initializeNodes();
   await network.establishConnections();
+  await network.sendFiles();
 })();

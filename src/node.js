@@ -1,7 +1,12 @@
 const net = require("net");
 const CryptoHelper = require("./cryptoHelper");
 const FilesHelper = require("./filesHelper");
-const { CERT_DIR, CA_SERVER_PORT, KEY_SERVER_PORT } = require("./constants");
+const {
+  CERT_DIR,
+  CA_SERVER_PORT,
+  KEY_SERVER_PORT,
+  RECEIVED_DIR,
+} = require("./constants");
 
 const logMessage = (node, msg) => console.log(`[${node}] ${msg}`);
 
@@ -146,6 +151,30 @@ class Node {
                 })
               );
               logMessage(this.nodeName, "Sent serverReady message to client.");
+              break;
+
+            case "file":
+              logMessage(this.nodeName, "Received file transfer request.");
+              if (!sessionKey) {
+                logMessage(
+                  this.nodeName,
+                  "Session key not established. File transfer denied."
+                );
+                return;
+              }
+              const decodedData = CryptoHelper.decodeWithSessionKey(
+                sessionKey,
+                payload.fileData
+              );
+              const fileDir = FilesHelper.joinPaths(
+                RECEIVED_DIR,
+                this.nodeName
+              );
+              await FilesHelper.ensureDirectoryExists(fileDir);
+
+              const filePath = FilesHelper.joinPaths(fileDir, payload.fileName);
+              await FilesHelper.writeToFile(filePath, decodedData);
+              logMessage(this.nodeName, `File saved to: ${filePath}`);
               break;
 
             default:
@@ -308,6 +337,32 @@ class Node {
         resolve(false);
       });
     });
+  }
+
+  async transmitFile(targetPeer, fileLocation) {
+    const connection = this.activeClientConnections.find(
+      (conn) => conn.peerName === targetPeer
+    );
+
+    if (!connection) {
+      logMessage(this.nodeName, `No active session found with ${targetPeer}`);
+      return;
+    }
+
+    const fileContent = await FilesHelper.readFromFile(fileLocation);
+    const encryptedData = CryptoHelper.encodeWithSessionKey(
+      connection.sessionKey,
+      fileContent
+    );
+
+    connection.socket.write(
+      JSON.stringify({
+        type: "file",
+        fileName: FilesHelper.getFileName(fileLocation),
+        fileData: encryptedData,
+      })
+    );
+    logMessage(this.nodeName, `File sent to ${targetPeer}`);
   }
 }
 

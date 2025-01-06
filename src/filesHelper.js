@@ -23,6 +23,10 @@ class FilesHelper {
     return path.join(...paths);
   }
 
+  static getFileName(filePath) {
+    return path.basename(filePath);
+  }
+
   static async fileExists(filePath) {
     try {
       await fsp.access(filePath);
