@@ -14,62 +14,83 @@ class Node {
   }
 
   async initializeNode() {
-    const clientSocket = new net.Socket();
-    return new Promise((resolve, reject) => {
-      clientSocket.connect(KEY_SERVER_PORT, () => {
-        logMessage(this.nodeName, "Requesting certificate and keys...");
-        clientSocket.write(
-          JSON.stringify({ type: "generateKeys", nodeName: this.nodeName })
-        );
-      });
+    const serverCertPath = FilesHelper.joinPaths(
+      CERT_DIR,
+      `${this.nodeName}-cert.pem`
+    );
+    const serverKeyPath = FilesHelper.joinPaths(
+      CERT_DIR,
+      `${this.nodeName}-key.pem`
+    );
 
-      clientSocket.on("data", async (data) => {
-        const response = JSON.parse(data.toString());
-        if (response.type === "keyPair") {
+    if (
+      (await FilesHelper.fileExists(serverCertPath)) &&
+      (await FilesHelper.fileExists(serverKeyPath))
+    ) {
+      logMessage(this.nodeName, "Certificate and key files found. Loading...");
+      this.nodeCert = JSON.parse(
+        await FilesHelper.readFromFile(serverCertPath)
+      );
+      this.privateKey = await FilesHelper.readFromFile(serverKeyPath);
+      logMessage(this.nodeName, "Loaded existing certificate and key.");
+    } else {
+      const clientSocket = new net.Socket();
+      return new Promise((resolve, reject) => {
+        clientSocket.connect(KEY_SERVER_PORT, () => {
+          logMessage(this.nodeName, "Requesting certificate and keys...");
+          clientSocket.write(
+            JSON.stringify({ type: "generateKeys", nodeName: this.nodeName })
+          );
+        });
+
+        clientSocket.on("data", async (data) => {
+          const response = JSON.parse(data.toString());
+          if (response.type === "keyPair") {
+            logMessage(
+              this.nodeName,
+              "Successfully received certificate and keys."
+            );
+            this.nodeCert = response.certificate;
+            this.privateKey = response.privateKey;
+
+            const keyPath = FilesHelper.joinPaths(
+              CERT_DIR,
+              `${this.nodeName}-key.pem`
+            );
+            await FilesHelper.writeToFile(keyPath, this.privateKey);
+
+            logMessage(this.nodeName, "Private key saved.");
+
+            const certPath = FilesHelper.joinPaths(
+              CERT_DIR,
+              `${this.nodeName}-cert.pem`
+            );
+            await FilesHelper.writeToFile(
+              certPath,
+              JSON.stringify(this.nodeCert)
+            );
+            logMessage(this.nodeName, "Certificate saved.");
+
+            resolve();
+          } else {
+            logMessage(
+              this.nodeName,
+              "Unexpected response received from Key Server."
+            );
+            reject(new Error("Unexpected response from Key Server."));
+          }
+          clientSocket.destroy();
+        });
+
+        clientSocket.on("error", (err) => {
           logMessage(
             this.nodeName,
-            "Successfully received certificate and keys."
+            `Key Server connection failed: ${err.message}`
           );
-          this.nodeCert = response.certificate;
-          this.privateKey = response.privateKey;
-
-          const keyPath = FilesHelper.joinPaths(
-            CERT_DIR,
-            `${this.nodeName}-key.pem`
-          );
-          await FilesHelper.writeToFile(keyPath, this.privateKey);
-
-          logMessage(this.nodeName, "Private key saved.");
-
-          const certPath = FilesHelper.joinPaths(
-            CERT_DIR,
-            `${this.nodeName}-cert.pem`
-          );
-          await FilesHelper.writeToFile(
-            certPath,
-            JSON.stringify(this.nodeCert)
-          );
-          logMessage(this.nodeName, "Certificate saved.");
-
-          resolve();
-        } else {
-          logMessage(
-            this.nodeName,
-            "Unexpected response received from Key Server."
-          );
-          reject(new Error("Unexpected response from Key Server."));
-        }
-        clientSocket.destroy();
+          reject(err);
+        });
       });
-
-      clientSocket.on("error", (err) => {
-        logMessage(
-          this.nodeName,
-          `Key Server connection failed: ${err.message}`
-        );
-        reject(err);
-      });
-    });
+    }
   }
 
   async launchServer() {
