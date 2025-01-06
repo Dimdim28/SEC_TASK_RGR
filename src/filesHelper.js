@@ -1,3 +1,4 @@
+const fs = require("fs");
 const fsp = require("fs").promises;
 const path = require("path");
 
@@ -8,6 +9,10 @@ class FilesHelper {
 
   static async readFromFile(filePath) {
     return await fsp.readFile(filePath, "utf8");
+  }
+
+  static readFromFileSync(filePath) {
+    return fs.readFileSync(filePath, "utf8");
   }
 
   static async ensureDirectoryExists(dirPath) {

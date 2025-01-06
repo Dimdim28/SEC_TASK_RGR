@@ -1,7 +1,7 @@
 const net = require("net");
 const CryptoHelper = require("./cryptoHelper");
 const FilesHelper = require("./filesHelper");
-const { CERT_DIR } = require("./constants");
+const { CERT_DIR, CA_SERVER_PORT } = require("./constants");
 const { CertificationManager } = require("./certificates");
 
 const logMessage = (node, msg) => console.log(`[${node}] ${msg}`);
@@ -231,11 +231,29 @@ class Node {
     });
   }
 
-  validateCertificate(cert) {
-    const certificateWithoutSignature = { ...cert };
-    delete certificateWithoutSignature.signature;
+  async validateCertificate(cert) {
+    return new Promise((resolve) => {
+      const validationSocket = new net.Socket();
+      validationSocket.connect(CA_SERVER_PORT, "localhost", () => {
+        validationSocket.write(
+          JSON.stringify({ type: "verifyCertificate", certificate: cert })
+        );
+      });
 
-    return CryptoHelper.verifySignature(this.caCert.publicKey, cert);
+      validationSocket.on("data", (data) => {
+        const result = JSON.parse(data.toString());
+        resolve(result.verified);
+        validationSocket.destroy();
+      });
+
+      validationSocket.on("error", (err) => {
+        logMessage(
+          this.nodeName,
+          `Certificate validation failed: ${err.message}`
+        );
+        resolve(false);
+      });
+    });
   }
 }
 
